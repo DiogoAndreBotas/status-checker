@@ -1,6 +1,5 @@
-version: "3.8"
+version: "3.9"
 
-# TODO: sometimes booting everything from web_api in cascade fails. try to introduce a timeout
 services:
 
   job_scheduler:
@@ -10,9 +9,10 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     environment:
-      POSTGRES_HOST: "host.docker.internal"
+      POSTGRES_HOST: "database"
       POSTGRES_PORT: "8083"
       POSTGRES_DB: "steam-status-checker"
       POSTGRES_USER: "dbotas"
@@ -27,9 +27,12 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      - job_scheduler
+      job_scheduler:
+        condition: service_started
+      database:
+        condition: service_healthy
     environment:
-      POSTGRES_HOST: "host.docker.internal"
+      POSTGRES_HOST: "database"
       POSTGRES_PORT: "8083"
       POSTGRES_DB: "steam-status-checker"
       POSTGRES_USER: "dbotas"
@@ -39,19 +42,23 @@ services:
       - backend
 
   database:
-    image: postgres:latest
+    image: postgres:16
     restart: unless-stopped
+    hostname: postgres
     environment:
       POSTGRES_DB: "steam-status-checker"
       POSTGRES_USER: "dbotas"
       POSTGRES_PASSWORD: "dbotaspass"
+      PGPORT: "8083"
     expose:
       - "8083"
-    ports:
-      - "8083:8083"
-    command: -p 8083
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbotas -d steam-status-checker -p 8083"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
   backend:
